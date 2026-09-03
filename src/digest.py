@@ -981,9 +981,8 @@ def send_discord_webhook(
                                 "Valorant Session Digest",
 
                             "content": (
-                                "@here"
-                                "<@515956597340504114> 🎮"
-                                "Your Valorant digest is here!"
+                                "@everyone"
+                                "Abby, your Valorant digest is here!"
                             ),
 
                             "allowed_mentions": {
