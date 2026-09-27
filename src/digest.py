@@ -981,7 +981,7 @@ def send_discord_webhook(
                                 "Valorant Session Digest",
 
                             "content": (
-                                "@everyone"
+                                "@here"
                                 "Abby, your Valorant digest is here!"
                             ),
 
