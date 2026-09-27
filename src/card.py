@@ -22,8 +22,8 @@ DARK_MUTED = "#454D57"
 
 BLUE = "#0088FF"        # Main Accent (Blue)
 
-RED = "#AA0000"         # Darker Red for Negative
-RED_DARK = "#770000"    # Dark Accent
+RED = "#FF4655"         # Original Red for Negative
+RED_DARK = "#8F2630"    # Dark Accent
 
 GREEN = "#00E5FF"     # Positive/Win (Cyan)
 GREEN_DARK = "#007788"
