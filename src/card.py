@@ -20,13 +20,15 @@ LIGHT = "#D8DCE1"
 MUTED = "#7F8994"
 DARK_MUTED = "#454D57"
 
-RED = "#FF4655"
-RED_DARK = "#8F2630"
+BLUE = "#0088FF"        # Main Accent (Blue)
 
-GREEN = "#7CFF6B"
-GREEN_DARK = "#285E2B"
+RED = "#AA0000"         # Darker Red for Negative
+RED_DARK = "#770000"    # Dark Accent
 
-ORANGE = "#FFB347"
+GREEN = "#00E5FF"     # Positive/Win (Cyan)
+GREEN_DARK = "#007788"
+
+ORANGE = "#4A90E2"    # Even/Neutral
 
 BORDER = "#29313A"
 GRID = "#1A2129"
@@ -281,7 +283,7 @@ def draw_background(
             (150, 12),
             (0, 72),
         ],
-        fill=RED
+        fill=BLUE
     )
 
     draw.polygon(
@@ -291,7 +293,7 @@ def draw_background(
             (width, height - 12),
             (width - 95, height - 12),
         ],
-        fill=RED
+        fill=BLUE
     )
 
     # --------------------------------------------------------
@@ -324,7 +326,7 @@ def draw_header(
     player_tag
 ):
 
-    # Red vertical marker
+    # Blue vertical marker
 
     draw.rectangle(
         (
@@ -333,7 +335,7 @@ def draw_header(
             71,
             135
         ),
-        fill=RED
+        fill=BLUE
     )
 
     draw.text(
@@ -353,7 +355,7 @@ def draw_header(
         ),
         "SESSION DIGEST",
         font=FONT_SUBTITLE,
-        fill=RED
+        fill=BLUE
     )
 
     # Player
@@ -466,7 +468,7 @@ def draw_stat_cards(
 
         else:
 
-            accent = RED
+            accent = BLUE
 
         draw.rectangle(
             (
@@ -766,6 +768,7 @@ def draw_match_rows(
 # ============================================================
 
 def draw_session_result(
+    image,
     draw,
     session,
     y
@@ -862,6 +865,38 @@ def draw_session_result(
         result_color
     )
 
+    # --------------------------------------------------------
+    # Abby Reaction Image
+    # --------------------------------------------------------
+
+    if net_rr > 0:
+        abby_path = Path(__file__).parent.parent / "happy abby.png"
+    elif net_rr < 0:
+        abby_path = Path(__file__).parent.parent / "angry abby.png"
+    else:
+        abby_path = Path(__file__).parent.parent / "neutral abby.png"
+    
+    if abby_path.exists():
+        try:
+            with Image.open(abby_path) as abby_img:
+                # Resize image to fit below the bar
+                new_height = 250
+                aspect_ratio = abby_img.width / abby_img.height
+                new_width = int(new_height * aspect_ratio)
+                
+                abby_resized = abby_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                
+                paste_x = WIDTH - new_width - 65
+                paste_y = image.height - new_height
+                
+                if abby_resized.mode in ('RGBA', 'LA') or (abby_resized.mode == 'P' and 'transparency' in abby_resized.info):
+                    abby_resized = abby_resized.convert("RGBA")
+                    image.paste(abby_resized, (paste_x, paste_y), abby_resized)
+                else:
+                    image.paste(abby_resized, (paste_x, paste_y))
+        except Exception as e:
+            print(f"[WARNING] Could not load {abby_path}: {e}")
+
 
 # ============================================================
 # Footer
@@ -872,25 +907,27 @@ def draw_footer(
     height
 ):
 
-    y = height - 42
+    y_top = height - 60
+    y_bottom = height - 42
 
     draw.text(
         (
             65,
-            y
+            y_top
         ),
-        "VALORANT SESSION DIGEST",
+        "Powered by HenrikDev",
         font=FONT_FOOTER,
         fill=DARK_MUTED
     )
 
-    draw_text_right(
-        draw,
-        WIDTH - 65,
-        y,
-        "Powered by HenrikDev",
-        FONT_FOOTER,
-        DARK_MUTED
+    draw.text(
+        (
+            65,
+            y_bottom
+        ),
+        "VALORANT SESSION DIGEST",
+        font=FONT_FOOTER,
+        fill=DARK_MUTED
     )
 
 
@@ -901,7 +938,8 @@ def draw_footer(
 def generate_session_card(
     session,
     player_name,
-    player_tag
+    player_tag,
+    output_file=None
 ):
 
     matches = session["matches"]
@@ -921,7 +959,7 @@ def generate_session_card(
         )
     )
 
-    result_height = 100
+    result_height = 350
 
     footer_height = 70
 
@@ -1014,6 +1052,7 @@ def generate_session_card(
     )
 
     draw_session_result(
+        image,
         draw,
         session,
         result_y
@@ -1032,13 +1071,16 @@ def generate_session_card(
     # Save
     # --------------------------------------------------------
 
+    if output_file is None:
+        output_file = OUTPUT_FILE
+
     image.save(
-        OUTPUT_FILE,
+        output_file,
         "PNG"
     )
 
     print(
-        f"[CARD] Generated {OUTPUT_FILE}"
+        f"[CARD] Generated {output_file}"
     )
 
-    return OUTPUT_FILE
+    return output_file
