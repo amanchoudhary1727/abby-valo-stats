@@ -36,15 +36,17 @@ REQUEST_TIMEOUT = 30
 # Validation
 # ============================================================
 
-def validate_config():
+def validate_config(save_only: bool = False):
     required = {
         "VALORANT_API_KEY": API_KEY,
         "VALORANT_NAME": VALORANT_NAME,
         "VALORANT_TAG": VALORANT_TAG,
         "VALORANT_REGION": VALORANT_REGION,
         "VALORANT_PLATFORM": VALORANT_PLATFORM,
-        "DISCORD_WEBHOOK_URL": DISCORD_WEBHOOK_URL,
     }
+
+    if not save_only:
+        required["DISCORD_WEBHOOK_URL"] = DISCORD_WEBHOOK_URL
 
     missing = [
         key
@@ -634,6 +636,104 @@ def get_match_result(
 
 
 # ============================================================
+# HenrikDev - Current Rank
+# ============================================================
+
+def fetch_current_rank() -> dict[str, Any]:
+
+    url = (
+        f"{API_BASE}/valorant/v3/mmr/"
+        f"{VALORANT_REGION}/"
+        f"{VALORANT_PLATFORM}/"
+        f"{VALORANT_NAME}/"
+        f"{VALORANT_TAG}"
+    )
+
+    print(
+        "[API] Fetching current rank (v3 MMR)..."
+    )
+
+    try:
+        response = api_get(
+            url
+        )
+
+        data = response.get(
+            "data",
+            {}
+        )
+
+        current = data.get(
+            "current",
+            {}
+        )
+
+        tier = current.get(
+            "tier",
+            {}
+        )
+
+        tier_id = tier.get(
+            "id"
+        )
+
+        tier_name = tier.get(
+            "name"
+        )
+
+        rr = current.get(
+            "rr",
+            0
+        )
+
+        if tier_name:
+            print(
+                f"[API] Current rank: "
+                f"{tier_name} ({rr} RR)"
+            )
+
+            return {
+                "tier_id": tier_id,
+                "tier_name": str(tier_name),
+                "rr": int(rr) if rr is not None else 0,
+            }
+
+    except Exception as exc:
+        print(
+            f"[WARNING] Could not fetch v3 MMR: {exc}"
+        )
+
+    return {}
+
+
+def resolve_rank_info(
+    current_rank: dict[str, Any],
+    mmr_history: list[dict[str, Any]]
+) -> dict[str, Any]:
+
+    if current_rank and current_rank.get("tier_name"):
+        return current_rank
+
+    if mmr_history:
+        for entry in mmr_history:
+            tier_name = entry.get("currenttierpatched")
+            if tier_name:
+                tier_id = entry.get("currenttier")
+                rr = entry.get("ranking_in_tier", 0)
+                print(
+                    f"[API] Fallback rank from MMR history: "
+                    f"{tier_name} ({rr} RR)"
+                )
+                return {
+                    "tier_id": tier_id,
+                    "tier_name": str(tier_name),
+                    "rr": int(rr) if rr is not None else 0,
+                }
+
+    return {}
+
+
+# ============================================================
 # HenrikDev - MMR History
 # ============================================================
 
@@ -981,8 +1081,7 @@ def send_discord_webhook(
                                 "Valorant Session Digest",
 
                             "content": (
-                                "@here"
-                                "Abby, your Valorant digest is here!"
+                                "@here Abby, your Valorant digest is here!"
                             ),
 
                             "allowed_mentions": {
@@ -1032,7 +1131,16 @@ def main():
     print("VALORANT SESSION DIGEST")
     print("=" * 60)
 
-    validate_config()
+    save_only = (
+        "--save-only" in sys.argv
+        or "--dry-run" in sys.argv
+        or os.getenv("SAVE_ONLY", "").lower() in ("true", "1")
+    )
+
+    test_card = "--test-card" in sys.argv
+    no_state_update = "--no-state-update" in sys.argv
+
+    validate_config(save_only=save_only)
 
     # --------------------------------------------------------
     # 1. Load state
@@ -1049,9 +1157,16 @@ def main():
     # 2. Fetch API data
     # --------------------------------------------------------
 
+    current_rank = fetch_current_rank()
+
     matches = fetch_matches()
 
     mmr_history = fetch_mmr_history()
+
+    rank_info = resolve_rank_info(
+        current_rank,
+        mmr_history
+    )
 
     # --------------------------------------------------------
     # 3. Identify new matches
@@ -1066,6 +1181,12 @@ def main():
         f"[STATE] New unprocessed matches: "
         f"{len(new_matches)}"
     )
+
+    if test_card and not new_matches and matches:
+        print(
+            "[TEST] --test-card enabled: Using latest match for preview."
+        )
+        new_matches = [matches[0]]
 
     # --------------------------------------------------------
     # 4. SILENCE PROTOCOL
@@ -1160,7 +1281,8 @@ def main():
     card_path = generate_session_card(
         session,
         VALORANT_NAME,
-        VALORANT_TAG
+        VALORANT_TAG,
+        rank_info=rank_info
     )
 
     # --------------------------------------------------------
@@ -1171,6 +1293,13 @@ def main():
     # successful delivery.
     # --------------------------------------------------------
 
+    if save_only or test_card:
+        print(
+            f"[SAVE-ONLY] Card saved locally to {card_path}. "
+            "Discord webhook skipped and state unchanged."
+        )
+        return 0
+
     send_discord_webhook(
         card_path
     )
@@ -1179,6 +1308,13 @@ def main():
     # 9. Only AFTER successful Discord delivery:
     #    update state.json
     # --------------------------------------------------------
+
+    if no_state_update:
+        print(
+            "[TEST] --no-state-update flag active. "
+            "Discord card delivered, state.json left unchanged."
+        )
+        return 0
 
     new_ids = [
         get_match_id(match)

@@ -99,6 +99,8 @@ FONT_MATCH_BOLD = load_font(19, True)
 FONT_SMALL = load_font(14, False)
 FONT_SMALL_BOLD = load_font(14, True)
 
+FONT_RANK = load_font(16, True)
+
 FONT_FOOTER = load_font(13, False)
 
 
@@ -317,13 +319,78 @@ def draw_background(
 
 
 # ============================================================
+# Rank helpers
+# ============================================================
+
+def get_rank_color(tier_name: str | None) -> str:
+    if not tier_name:
+        return MUTED
+
+    name = tier_name.lower()
+    if "iron" in name:
+        return "#A1A1A1"
+    if "bronze" in name:
+        return "#CD7F32"
+    if "silver" in name:
+        return "#C0C0C0"
+    if "gold" in name:
+        return "#E5C558"
+    if "platinum" in name:
+        return "#48B8B8"
+    if "diamond" in name:
+        return "#B489FF"
+    if "ascendant" in name:
+        return "#2FE4A6"
+    if "immortal" in name:
+        return "#FF4655"
+    if "radiant" in name:
+        return "#FFF4B8"
+    return GREEN
+
+
+def get_rank_image_path(tier_name: str | None) -> Path | None:
+    if not tier_name:
+        return None
+
+    clean_name = tier_name.strip()
+    candidates = [
+        f"{clean_name} Rank.png",
+        f"{clean_name}.png",
+        f"{clean_name.title()} Rank.png",
+    ]
+
+    base_dirs = [
+        Path(__file__).parent.parent / "rank_images",
+        Path(__file__).parent / "rank_images",
+        Path("rank_images"),
+        Path("../rank_images"),
+    ]
+
+    for base_dir in base_dirs:
+        if not base_dir.exists():
+            continue
+        for candidate in candidates:
+            p = base_dir / candidate
+            if p.exists():
+                return p
+        # Fallback case-insensitive match
+        for f in base_dir.glob("*.png"):
+            if clean_name.lower() in f.stem.lower():
+                return f
+
+    return None
+
+
+# ============================================================
 # Header
 # ============================================================
 
 def draw_header(
+    image,
     draw,
     player_name,
-    player_tag
+    player_tag,
+    rank_info: dict | None = None
 ):
 
     # Blue vertical marker
@@ -359,14 +426,71 @@ def draw_header(
     )
 
     # Player
+    player = f"{player_name}#{player_tag}"
 
-    player = (
-        f"{player_name}#{player_tag}"
-    )
+    tier_name = rank_info.get("tier_name") if rank_info else None
+    rr = rank_info.get("rr") if rank_info else None
 
+    if tier_name:
+        if rr is not None:
+            rank_subtitle = f"{tier_name.upper()} • {rr} RR"
+        else:
+            rank_subtitle = tier_name.upper()
+        rank_color = get_rank_color(tier_name)
+    else:
+        rank_subtitle = "COMPETITIVE SESSION"
+        rank_color = MUTED
+
+    rank_icon_path = get_rank_image_path(tier_name)
+    right_x = WIDTH - 70
+
+    if rank_icon_path and rank_icon_path.exists():
+        try:
+            with Image.open(rank_icon_path) as rank_img:
+                icon_size = 76
+                rank_resized = rank_img.resize(
+                    (icon_size, icon_size),
+                    Image.Resampling.LANCZOS
+                )
+                if rank_resized.mode not in ("RGBA", "LA"):
+                    rank_resized = rank_resized.convert("RGBA")
+
+                p_bbox = draw.textbbox((0, 0), player, font=FONT_TITLE)
+                player_w = p_bbox[2] - p_bbox[0]
+                s_bbox = draw.textbbox((0, 0), rank_subtitle, font=FONT_RANK)
+                sub_w = s_bbox[2] - s_bbox[0]
+                max_w = max(player_w, sub_w)
+
+                icon_x = right_x - max_w - icon_size - 16
+                icon_y = 57
+
+                image.paste(rank_resized, (icon_x, icon_y), rank_resized)
+
+                draw_text_right(
+                    draw,
+                    right_x,
+                    58,
+                    player,
+                    FONT_TITLE,
+                    WHITE
+                )
+
+                draw_text_right(
+                    draw,
+                    right_x,
+                    102,
+                    rank_subtitle,
+                    FONT_RANK,
+                    rank_color
+                )
+                return
+        except Exception as exc:
+            print(f"[WARNING] Could not paste rank image {rank_icon_path}: {exc}")
+
+    # Fallback without icon
     draw_text_right(
         draw,
-        WIDTH - 70,
+        right_x,
         65,
         player,
         FONT_TITLE,
@@ -375,11 +499,11 @@ def draw_header(
 
     draw_text_right(
         draw,
-        WIDTH - 70,
+        right_x,
         108,
-        "COMPETITIVE SESSION",
+        rank_subtitle,
         FONT_SMALL_BOLD,
-        MUTED
+        rank_color
     )
 
 
@@ -939,6 +1063,7 @@ def generate_session_card(
     session,
     player_name,
     player_tag,
+    rank_info=None,
     output_file=None
 ):
 
@@ -1004,9 +1129,11 @@ def generate_session_card(
     # --------------------------------------------------------
 
     draw_header(
+        image,
         draw,
         player_name,
-        player_tag
+        player_tag,
+        rank_info
     )
 
     # --------------------------------------------------------
