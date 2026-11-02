@@ -73,6 +73,49 @@ jobs:
           fi
 
       # ------------------------------------------------------
+      # Create session snapshot
+      # ------------------------------------------------------
+
+      - name: Create session snapshot
+        if: steps.state_changes.outputs.changed == 'true'
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+
+          cp state.json "$TIMESTAMP.json"
+
+          echo "TIMESTAMP=$TIMESTAMP" >> "$GITHUB_ENV"
+
+          echo "Created snapshot: $TIMESTAMP.json"
+
+      # ------------------------------------------------------
+      # Install Azure CLI
+      # ------------------------------------------------------
+
+      - name: Install Azure CLI
+        if: steps.state_changes.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+      # ------------------------------------------------------
+      # Upload snapshot to Azure Blob Storage
+      # ------------------------------------------------------
+
+      - name: Upload snapshot to Azure
+        if: steps.state_changes.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          STORAGE_ACCOUNT: ${{ secrets.AZURE_STORAGE_ACCOUNT }}
+          STORAGE_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
+        run: |
+          az storage blob upload \
+            --account-name "$STORAGE_ACCOUNT" \
+            --account-key "$STORAGE_KEY" \
+            --container-name valorant-sessions \
+            --file "${TIMESTAMP}.json" \
+            --name "${TIMESTAMP}.json"
+
+      # ------------------------------------------------------
       # Commit updated state
       # ------------------------------------------------------
 
