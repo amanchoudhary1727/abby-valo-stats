@@ -1,0 +1,1 @@
+[![Valorant Session Digest](https://github.com/amanchoudhary1727/abby-valo-stats/actions/workflows/valorant-digest.yml/badge.svg)](https://github.com/amanchoudhary1727/abby-valo-stats/actions/workflows/valorant-digest.yml)
